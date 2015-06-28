@@ -23,21 +23,25 @@ typedef enum { wdt_16ms = 0, wdt_32ms, wdt_64ms, wdt_128ms, wdt_250ms, wdt_500ms
 bool isWeatherStation = true;
 
 void setup() {
+    radio.begin();
+}
+
+void sendWeatherData(){
   pinMode(2, OUTPUT);
-  digitalWrite(2, HIGH);
+  digitalWrite(2, HIGH); //light sensor
   pinMode(5, OUTPUT);
-  digitalWrite(5, HIGH);
+  digitalWrite(5, HIGH); //bmp
   delay(500);
-  Serial.begin(9600);
+  //Serial.begin(9600);
   LightSensor.begin();
   LightSensor.SetAddress(Device_Address_L);
   LightSensor.SetMode(Continuous_H_resolution_Mode);
-  Serial.println("lightRunning...");
+  //Serial.println("lightRunning...");
   if (!bmp.begin()) {
-    Serial.println("Could not find a valid BMP085 sensor, check wiring!");
+    //Serial.println("Could not find a valid BMP085 sensor, check wiring!");
     while (1) {}
   }
-  radio.begin();
+  radio.powerUp();          
   //sender
   //radio.openWritingPipe(pipes[0]);
   //radio.openReadingPipe(1,pipes[1]);
@@ -45,14 +49,13 @@ void setup() {
   //receiver
   radio.openWritingPipe(pipes[1]);
   radio.openReadingPipe(1, pipes[0]);
-  // Start listening
-  radio.startListening();
+
 }
 
 void loop() {
   // Pong back role.  Receive each packet, dump it out, and send it back
   if (isWeatherStation) {
-    if ( radio.available() ) {                                  // if there is data ready
+    if ( radio.available() ) {                                  // if there is data ready, pls mov
       Serial.print("Temperature = ");
       Serial.print(bmp.readTemperature());
       Serial.println(" *C");
@@ -103,7 +106,7 @@ wa
 
     }
   }
-  if (not isWeatherStation)  {                     // Ping out role.  Repeatedly send the current time
+  if (not isWeatherStation)  {                     // stuff should be moved around lol, fix pls
     radio.powerUp();                                // Power up the radio after sleeping
     radio.stopListening();                          // First, stop listening so we can talk.
 
