@@ -1,16 +1,12 @@
+#include <BH1750FVI.h>
 #include <SPI.h>
-
 #include <printf.h>
 #include <avr/sleep.h>
 #include <avr/power.h>
 #include <nRF24L01.h>
 #include <RF24.h>
-
 #include <Adafruit_BMP085.h>
-
 #include <Wire.h>
-
-#include <BH1750FVI.h>
 
 Adafruit_BMP085 bmp;
 
@@ -20,47 +16,51 @@ BH1750FVI LightSensor;
 RF24 radio(9, 10);
 const uint64_t pipes[2] = { 0xF0F0F0F0E1LL, 0xF0F0F0F0D2LL };   // Radio pipe addresses for the 2 nodes to communicate.
 typedef enum { wdt_16ms = 0, wdt_32ms, wdt_64ms, wdt_128ms, wdt_250ms, wdt_500ms, wdt_1s, wdt_2s, wdt_4s, wdt_8s } wdt_prescalar_e;
-bool isWeatherStation = true;
-float weatherData[6];//temp,pressure,altitude in meters,Lux intensity,current,,solarvolt,
+bool isWeatherStation = false;
+float weatherData[6] = { -1, -1, -1, -1, -1}; //temp,pressure,altitude in meters,Lux intensity,current,,solarvolt. all default to -1
 
 void setup() {
   radio.begin();
+  radio.setPALevel(RF24_PA_MAX);
+  radio.setDataRate(RF24_250KBPS);
   if (isWeatherStation) {
     radio.powerDown();
-    pinMode(5, OUTPUT);//bmp
+    pinMode(5, INPUT);//bmp actually output, but lux hates bmp :(
     pinMode(4, OUTPUT);//current sensor
     pinMode(3, OUTPUT);//solar voltage sensor
     pinMode(2, OUTPUT);//light sensor
     pinMode(A1, INPUT);//current sensor
     pinMode(A0, INPUT);//solar voltage sensor
+    digitalWrite(2, HIGH); //light sensor
+    delay(500);
+    LightSensor.begin();
+    LightSensor.SetAddress(Device_Address_L);
+    LightSensor.SetMode(Continuous_H_resolution_Mode);
   } else {
     radio.startListening();
   }
 }
 
 void getLightSensorData() {
-  digitalWrite(2, HIGH); //light sensor
-  LightSensor.begin();
-  LightSensor.SetAddress(Device_Address_L);
-  LightSensor.SetMode(Continuous_H_resolution_Mode);
-  delay(50);
   weatherData[3] = LightSensor.GetLightIntensity();
-  digitalWrite(2, LOW); //light sensor
 }
 void getBMPData() {
+  pinMode(5, OUTPUT);//bmp
   digitalWrite(5, HIGH); //bmp
   delay(50);
   if (!bmp.begin()) {
     // Serial.println("Could not find a valid BMP085 sensor, check wiring!");
     digitalWrite(5, LOW); //bmp
+    pinMode(5, INPUT);//bmp
     return;
   }
   weatherData[0] = bmp.readTemperature();
   weatherData[1] = bmp.readPressure(); //Pa
   // Calculate altitude assuming 'standard' barometric
   // pressure of 1013.25 millibar = 101325 Pascal
-  weatherData[2] = bmp.readAltitude(101400); //meters
+  weatherData[2] = bmp.readAltitude(); //meters
   digitalWrite(5, LOW); //bmp
+  pinMode(5, INPUT);//bmp
 }
 void getCurrentData() {
   digitalWrite(4, HIGH); //current
@@ -99,21 +99,23 @@ void debugData() {
   Serial.println(" current");
   Serial.print(weatherData[5]);
   Serial.println(" volts");
-  delay(5);
+  Serial.println("--------------------");
+  delay(50);
   Serial.end();
 }
 
 void loop() {
   if (isWeatherStation) {
+    //delay(1000);
+    delay(900000); //15 minutes
     getLightSensorData();
     getBMPData();
-    getCurrentData();
     getVoltageData();
-    // sendWeatherData();
-    debugData();
-    delay(500);
+    getCurrentData();
+    sendWeatherData();
+    //debugData();
   }
-  if (not isWeatherStation)  {
+  else  {
     //receiver
     //radio.openWritingPipe(pipes[1]);
     radio.openReadingPipe(1, pipes[0]);
